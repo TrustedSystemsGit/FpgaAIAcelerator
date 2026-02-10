@@ -1,3 +1,5 @@
+// Copyright (c) 2026 Trusted Systems. MIT License. See LICENSE for details.
+
 `timescale 1ns / 1ps
 
 //──────────────────────────────────────────────────────────────────────────────
