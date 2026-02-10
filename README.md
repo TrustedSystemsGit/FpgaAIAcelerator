@@ -1,6 +1,6 @@
 # FpgaAIAcelerator
 AI accelerator for a network intrusion detection system (NIDS) based on Virtex-6
-### A ready-to-use ML605 board project implementing an AI accelerator for a network intrusion detection system (NIDS) based on Virtex-6. 
+### A ready-to-use ML605 board project implementing. 
 The project includes:
 Hardware: Verilog code for the accelerator (nids_autonomous) with feature extraction, CNN classifier, anomaly autoencoder and online learning.
 Testbench: A complete simulation testbench for verification.
