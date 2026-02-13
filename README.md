@@ -166,3 +166,4 @@ ISim waveform viewer screenshot.
 - **Integration Test**: Combine all TBs in one super-TB if needed.
 - **Update TBs**: Add assertions (e.g., `assert(packet_valid == 1)`) for auto-check.
 
+© 2026 Trusted Systems
