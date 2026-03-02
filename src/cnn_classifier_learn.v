@@ -1,5 +1,3 @@
-// Copyright (c) 2026 Trusted Systems. MIT License. See LICENSE for details.
-
 `timescale 1ns / 1ps
 
 //──────────────────────────────────────────────────────────────────────────────
@@ -20,7 +18,7 @@ module cnn_classifier_learn (
 );
 
     localparam INPUT_SIZE     = 20;
-    localparam HIDDEN_NEURONS = 64;
+    localparam HIDDEN_NEURONS = 4;
     localparam CLASS_COUNT    = 8;
     localparam LR             = 1;
     localparam SHIFT          = 10;
@@ -66,19 +64,16 @@ module cnn_classifier_learn (
     initial begin
         for (init_h = 0; init_h < HIDDEN_NEURONS; init_h = init_h + 1) begin
             for (init_i = 0; init_i < INPUT_SIZE; init_i = init_i + 1) begin
-                fc1_weights[init_h][init_i] = $signed($random % 10);
+                fc1_weights[init_h][init_i] = (init_h + init_i) % 10;  // 0..9
             end
-            fc1_bias[init_h] = 0;
         end
 
         for (init_c = 0; init_c < CLASS_COUNT; init_c = init_c + 1) begin
             for (init_h = 0; init_h < HIDDEN_NEURONS; init_h = init_h + 1) begin
-                fc2_weights[init_c][init_h] = $signed($random % 10);
+                fc2_weights[init_c][init_h] = (init_c + init_h) % 10;  // 0..9
             end
-            fc2_bias[init_c] = 0;
         end
     end
-
     //──────────────────────────────────────────────────────────────────────────
     //  FC1: feat_in → hidden (generate для отдельных сумм)
     //──────────────────────────────────────────────────────────────────────────
@@ -115,7 +110,7 @@ module cnn_classifier_learn (
                     sum_fc2 = sum_fc2 + hidden[h_fc2] * fc2_weights[c][h_fc2];
                 end
             end
-            assign logits[c] = sum_fc2 >> 8;
+            assign logits[c] = sum_fc2[15:8];  // Equivalent to arithmetic >> 8
         end
     endgenerate
 
@@ -144,31 +139,83 @@ module cnn_classifier_learn (
             class_label <= max_idx;
         end
     end
-
+    
     //──────────────────────────────────────────────────────────────────────────
-    //  Обучение (заглушка - обновление при метке или аномалии)
+    //  Обучение: полный SGD с backprop (update if label_in_valid)
     //──────────────────────────────────────────────────────────────────────────
 
-    wire update_en = label_in_valid || anomaly_flag;
+    wire update_en = label_in_valid;  // Supervised only
 
-    genvar u_h, u_i;
+    // One-hot target from label_in (wire array)
+    wire signed [7:0] target [0:CLASS_COUNT-1];
+
+    genvar t;
     generate
-        for (u_h = 0; u_h < HIDDEN_NEURONS; u_h = u_h + 1) begin : update_fc1
-            for (u_i = 0; u_i < INPUT_SIZE; u_i = u_i + 1) begin : update_fc1_in
-                always @(posedge clk) begin
-                    if (update_en) fc1_weights[u_h][u_i] <= fc1_weights[u_h][u_i] + 8'sh01;
-                end
-            end
+        for (t = 0; t < CLASS_COUNT; t = t + 1) begin : one_hot
+            assign target[t] = (label_in == t) ? 8'sh7F : 8'sh00;  // Approx 1/0
         end
     endgenerate
 
+    // Output error = logits - target (approx for cross-entropy)
+    wire signed [7:0] output_error [0:CLASS_COUNT-1];
+
+    genvar oe;
+    generate
+        for (oe = 0; oe < CLASS_COUNT; oe = oe + 1) begin : out_err
+            assign output_error[oe] = logits[oe] - target[oe];
+        end
+    endgenerate
+
+    // Hidden error = sum(output_error * fc2_weights) * derivative(ReLU)
+    wire signed [7:0] hidden_error [0:HIDDEN_NEURONS-1];
+
+    genvar he;
+	 integer oe_i;
+    generate
+        for (he = 0; he < HIDDEN_NEURONS; he = he + 1) begin : hid_err
+            reg signed [15:0] sum_he;
+            always @(*) begin
+                sum_he = 0;
+                for (oe_i = 0; oe_i < CLASS_COUNT; oe_i = oe_i + 1) begin
+                    sum_he = sum_he + output_error[oe_i] * fc2_weights[oe_i][he];
+                end
+            end
+            wire signed [7:0] relu_deriv = (hidden[he] > 0) ? 8'sh7F : 8'sh00;  // 1 or 0 approx
+				wire signed [15:0] temp_expr = (sum_he >> 8) * relu_deriv >> 7;
+            assign hidden_error[he] = temp_expr[7:0];
+		  end
+    endgenerate
+
+    // Update fc2_weights: fc2_weights[c][h] += (output_error[c] * hidden[h] * LR) >> SHIFT
     genvar u_c, u_h2;
     generate
         for (u_c = 0; u_c < CLASS_COUNT; u_c = u_c + 1) begin : update_fc2
             for (u_h2 = 0; u_h2 < HIDDEN_NEURONS; u_h2 = u_h2 + 1) begin : update_fc2_h
+                wire signed [15:0] delta = (output_error[u_c] * hidden[u_h2] * LR) >> SHIFT;
                 always @(posedge clk) begin
-                    if (update_en) fc2_weights[u_c][u_h2] <= fc2_weights[u_c][u_h2] + 8'sh01;
+                    if (update_en) fc2_weights[u_c][u_h2] <= fc2_weights[u_c][u_h2] + delta[7:0];
                 end
+            end
+            // Bias update
+            always @(posedge clk) begin
+                if (update_en) fc2_bias[u_c] <= fc2_bias[u_c] + output_error[u_c];
+            end
+        end
+    endgenerate
+
+    // Update fc1_weights: fc1_weights[h][i] += (hidden_error[h] * feat_in[i] * LR) >> SHIFT
+    genvar u_h, u_i;
+    generate
+        for (u_h = 0; u_h < HIDDEN_NEURONS; u_h = u_h + 1) begin : update_fc1
+            for (u_i = 0; u_i < INPUT_SIZE; u_i = u_i + 1) begin : update_fc1_in
+                wire signed [15:0] delta = (hidden_error[u_h] * feat_in[u_i] * LR) >> SHIFT;
+                always @(posedge clk) begin
+                    if (update_en) fc1_weights[u_h][u_i] <= fc1_weights[u_h][u_i] + delta[7:0];
+                end
+            end
+            // Bias update
+            always @(posedge clk) begin
+                if (update_en) fc1_bias[u_h] <= fc1_bias[u_h] + hidden_error[u_h];
             end
         end
     endgenerate

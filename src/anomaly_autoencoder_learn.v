@@ -1,5 +1,3 @@
-// Copyright (c) 2026 Trusted Systems. MIT License. See LICENSE for details.
-
 `timescale 1ns / 1ps
 
 //──────────────────────────────────────────────────────────────────────────────
@@ -54,14 +52,14 @@ module anomaly_autoencoder_learn (
     initial begin
         for (i = 0; i < HIDDEN_SIZE; i = i + 1) begin
             for (j = 0; j < INPUT_SIZE; j = j + 1) begin
-                enc_weights[i][j] = $signed($random % 10);
+                enc_weights[i][j] = (i + j) % 10;
             end
             enc_bias[i] = 0;
         end
 
         for (i = 0; i < INPUT_SIZE; i = i + 1) begin
             for (j = 0; j < HIDDEN_SIZE; j = j + 1) begin
-                dec_weights[i][j] = $signed($random % 10);
+                dec_weights[i][j] = (i + j) % 10;
             end
             dec_bias[i] = 0;
         end
@@ -96,7 +94,7 @@ module anomaly_autoencoder_learn (
                     sum_enc = sum_enc + feat_in[i] * enc_weights[h][i];
                 end
             end
-            assign hidden[h] = (sum_enc >> 8 > 0) ? (sum_enc >> 8) : 8'sh0;  // ReLU
+            assign hidden[h] = (sum_enc >> 8 > 0) ? sum_enc[15:8] : 8'sh0;  // ReLU
         end
     endgenerate
 
@@ -124,17 +122,21 @@ module anomaly_autoencoder_learn (
     //  Вычисление ошибок и квадратов
     //──────────────────────────────────────────────────────────────────────────
 
-    wire signed [7:0] err [0:INPUT_SIZE-1];
+	 wire signed [7:0] err [0:INPUT_SIZE-1];
     wire [15:0] sq [0:INPUT_SIZE-1];
 
     genvar e;
     generate
         for (e = 0; e < INPUT_SIZE; e = e + 1) begin : mse_calc
-            assign err[e] = feat_in[e] - recon[e];
+            reg signed [15:0] diff;  // Промежуточная переменная для вычитания
+            always @(*) begin
+                diff = feat_in[e] - recon[e];
+            end
+            assign err[e] = diff[7:0];   // Явный срез до 8 бит (младшие)
             assign sq[e]  = err[e] * err[e];
         end
     endgenerate
-
+	 
     //──────────────────────────────────────────────────────────────────────────
     //  MSE - только non-blocking присваивания
     //──────────────────────────────────────────────────────────────────────────
@@ -215,8 +217,12 @@ module anomaly_autoencoder_learn (
     genvar ub_h;
     generate
         for (ub_h = 0; ub_h < HIDDEN_SIZE; ub_h = ub_h + 1) begin : update_enc_bias
+            reg signed [15:0] bias_update;
+            always @(*) begin
+                bias_update = enc_bias[ub_h] + hidden_error[ub_h];
+            end
             always @(posedge clk) begin
-                if (anomaly_flag) enc_bias[ub_h] <= enc_bias[ub_h] + hidden_error[ub_h];
+                if (anomaly_flag) enc_bias[ub_h] <= bias_update[7:0];
             end
         end
     endgenerate
@@ -224,8 +230,12 @@ module anomaly_autoencoder_learn (
     genvar ub_o;
     generate
         for (ub_o = 0; ub_o < INPUT_SIZE; ub_o = ub_o + 1) begin : update_dec_bias
+            reg signed [15:0] bias_update_dec;
+            always @(*) begin
+                bias_update_dec = dec_bias[ub_o] + err[ub_o];
+            end
             always @(posedge clk) begin
-                if (anomaly_flag) dec_bias[ub_o] <= dec_bias[ub_o] + err[ub_o];
+                if (anomaly_flag) dec_bias[ub_o] <= bias_update_dec[7:0];
             end
         end
     endgenerate

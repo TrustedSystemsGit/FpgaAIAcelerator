@@ -1,5 +1,3 @@
-// Copyright (c) 2026 Trusted Systems. MIT License. See LICENSE for details.
-
 `timescale 1ns / 1ps
 
 //──────────────────────────────────────────────────────────────────────────────
@@ -28,7 +26,7 @@ module eth_mac_1g (
     //──────────────────────────────────────────────────────────────────────────
 
     reg [7:0] packet_data [0:1517];
-    reg [12:0] ptr = 0;  // Указатель (0..1517)
+    reg [10:0] ptr = 0;  // 11 бит (0..2047 >1517)
 
     //──────────────────────────────────────────────────────────────────────────
     //  Приём пакета (RX)
@@ -41,7 +39,7 @@ module eth_mac_1g (
         end else if (rx_dv) begin
             if (ptr < 1518) begin
                 packet_data[ptr] <= rx_data;
-                ptr <= ptr + 1;
+                ptr <= ptr + 1'b1;  // Explicit 1-bit +1
             end
         end else if (!rx_dv && ptr > 0) begin
             packet_valid <= 1;
@@ -55,13 +53,12 @@ module eth_mac_1g (
     //  Flattening памяти в широкий вектор (используем generate)
     //──────────────────────────────────────────────────────────────────────────
 
-    genvar gi;
+	 genvar gi;
     generate
         for (gi = 0; gi < 1518; gi = gi + 1) begin : flatten
-            assign packet_flat[8*gi +: 8] = packet_data[gi];
+            assign packet_flat[(gi*8) +: 8] = packet_data[gi];
         end
-    endgenerate
-
+    endgenerate	 
     //──────────────────────────────────────────────────────────────────────────
     //  TX - заглушка (эхо или пустой)
     //──────────────────────────────────────────────────────────────────────────

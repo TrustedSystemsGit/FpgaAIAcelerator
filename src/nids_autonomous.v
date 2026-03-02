@@ -1,5 +1,3 @@
-// Copyright (c) 2026 Trusted Systems. MIT License. See LICENSE for details.
-
 `timescale 1ns / 1ps
 // Top-level module for autonomous NIDS on ML605 Virtex-6
 // Integrates Ethernet MAC, Packet parser, CNN classifier, Anomaly autoencoder, UART
@@ -24,6 +22,8 @@ module nids_autonomous (
     wire [639:0] features_flat;  // Flattened features (20*32=640 bits)
     wire [7:0] class_label;
     wire anomaly_flag;
+    wire [7:0] label_in;
+    wire label_in_valid;
     // Ethernet MAC
     eth_mac_1g mac (
         .clk(clk_125mhz),

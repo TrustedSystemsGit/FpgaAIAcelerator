@@ -1,5 +1,3 @@
-// Copyright (c) 2026 Trusted Systems. MIT License. See LICENSE for details.
-
 `timescale 1ns / 1ps
 
 //──────────────────────────────────────────────────────────────────────────────
@@ -102,35 +100,35 @@ always @(posedge clk) begin
                 end
                 1: begin
                     tx_pin <= tx_byte[tx_state - 1];
-                    tx_state <= tx_state + 1;
+                    tx_state <= tx_state + 1'b1;  // Explicit 1-bit +1
                 end
                 2: begin
                     tx_pin <= tx_byte[tx_state - 1];
-                    tx_state <= tx_state + 1;
+                    tx_state <= tx_state + 1'b1;  // Explicit 1-bit +1
                 end
                 3: begin
                     tx_pin <= tx_byte[tx_state - 1];
-                    tx_state <= tx_state + 1;
+                    tx_state <= tx_state + 1'b1;  // Explicit 1-bit +1
                 end
                 4: begin
                     tx_pin <= tx_byte[tx_state - 1];
-                    tx_state <= tx_state + 1;
+                    tx_state <= tx_state + 1'b1;  // Explicit 1-bit +1
                 end
                 5: begin
                     tx_pin <= tx_byte[tx_state - 1];
-                    tx_state <= tx_state + 1;
+                    tx_state <= tx_state + 1'b1;  // Explicit 1-bit +1
                 end
                 6: begin
                     tx_pin <= tx_byte[tx_state - 1];
-                    tx_state <= tx_state + 1;
+                    tx_state <= tx_state + 1'b1;  // Explicit 1-bit +1
                 end
                 7: begin
                     tx_pin <= tx_byte[tx_state - 1];
-                    tx_state <= tx_state + 1;
+                    tx_state <= tx_state + 1'b1;  // Explicit 1-bit +1
                 end
                 8: begin
                     tx_pin <= tx_byte[tx_state - 1];
-                    tx_state <= tx_state + 1;
+                    tx_state <= tx_state + 1'b1;  // Explicit 1-bit +1
                 end
                 9: begin
                     tx_pin <= 1;  // Stop bit
@@ -139,7 +137,7 @@ always @(posedge clk) begin
                 default: tx_state <= 0;
             endcase
         end else begin
-            tx_cnt <= tx_cnt + 1;
+            tx_cnt <= tx_cnt + 1'b1;  // Explicit 1-bit +1
         end
     end
 end
@@ -167,7 +165,7 @@ always @(posedge clk) begin
         rx_cnt <= 0;
         rx_bit_cnt <= 0;
     end else begin
-        rx_cnt <= rx_cnt + 1;
+        rx_cnt <= rx_cnt + 1'b1;  // Explicit 1-bit +1
         if (rx_cnt == OVERSAMPLE_DIV - 1) begin
             rx_cnt <= 0;
             case (rx_state)
@@ -180,9 +178,9 @@ always @(posedge clk) begin
                 1: begin
                     if (rx_bit_cnt == 7) begin  // Sample center
                         rx_byte[rx_bit_cnt] <= rx_pin;
-                        rx_bit_cnt <= rx_bit_cnt + 1;
+                        rx_bit_cnt <= rx_bit_cnt + 1'b1;  // Explicit 1-bit +1
                         if (rx_bit_cnt == 7) rx_state <= 2;
-                    end else rx_bit_cnt <= rx_bit_cnt + 1;
+                    end else rx_bit_cnt <= rx_bit_cnt + 1'b1;  // Explicit 1-bit +1
                 end
                 2: begin
                     if (rx_pin) begin  // Stop bit
